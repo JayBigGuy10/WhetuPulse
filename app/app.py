@@ -46,9 +46,9 @@ def capture_snapshot():
     ffmpeg_result = subprocess.run(ffmpeg_command, text=True, capture_output=True)
 
     if "http error 403 forbidden" in ffmpeg_result.stderr.lower() or "error opening input" in ffmpeg_result.stderr.lower():
-        print("FFmpeg stdout:", ffmpeg_result.stdout)
-        print("FFmpeg stderr:", ffmpeg_result.stderr)
-        print(timestamp," UPDATING STEAM URL")
+        log("FFmpeg stdout: "+ffmpeg_result.stdout)
+        log("FFmpeg stderr: "+ffmpeg_result.stderr)
+        log("UPDATING STEAM URL")
         update_stream_url()
 
 def update_stream_url():
@@ -64,8 +64,8 @@ def update_stream_url():
     
     STREAM_URL = result.stdout.strip()
 
-    print("STREAM: ",STREAM)
-    print("STREAM_URL: ",STREAM_URL)
+    log("STREAM: "+STREAM)
+    log("STREAM_URL: "+STREAM_URL)
 
 def clear_old_images():
     """Deletes images older than 24 hours."""
@@ -73,8 +73,10 @@ def clear_old_images():
     for filename in os.listdir(IMAGE_DIR):
         file_path = os.path.join(IMAGE_DIR, filename)
         if os.stat(file_path).st_mtime < now - 86400:
-            print("REMOVE: ",file_path)
+            log("REMOVE: "+file_path)
             os.remove(file_path)
+
+        #TODO do this on filename
 
 def create_timelapse():
     """Creates a timelapse video from the collected images using a file list instead of glob."""
@@ -89,9 +91,10 @@ def create_timelapse():
     # Step 2: Use FFmpeg with the list file
     command = [
         'ffmpeg',
-        '-f', 'concat',  # Read from the list file
+        '-y', #overwrite existing file
+        '-f', 'concat',  
         '-safe', '0',     # Allow unsafe paths
-        '-i', list_file,
+        '-i', list_file, # Read from the list file
         '-framerate', '30',
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
@@ -100,8 +103,8 @@ def create_timelapse():
 
     ffmpeg_result = subprocess.run(command, text=True, capture_output=True)
 
-    print("FFmpeg stdout:", ffmpeg_result.stdout)
-    print("FFmpeg stderr:", ffmpeg_result.stderr)
+    log("FFmpeg stdout: "+ffmpeg_result.stdout)
+    log("FFmpeg stderr: "+ffmpeg_result.stderr)
 
 
 def post_to_twitter():
@@ -131,17 +134,26 @@ def post_to_twitter():
     yesterday = today - datetime.timedelta(days=1)
     yesterday_short = yesterday.strftime('%b %d')  # 'Jan 31' (for example)
 
+    #TODO get this from somewhere dynamic
     sampletweet = f"Morning to Morning 24 hour timelapse ({yesterday_short} through {today_short}) of the @NASASpaceflight Starbase Live camera at nsf.live/starbase \n\n #SpaceX #Starship"
 
     # upload the media using the old api
-    media = api.media_upload(filename=VIDEO_OUTPUT,media_category="tweet_video",additional_owners="1905372596826505218")
-    print("media: ",media)
+    log("Uploading Media")
+    media = api.media_upload(filename=VIDEO_OUTPUT,media_category="tweet_video",additional_owners="1905372596826505218",chunk_size=(5 * 1024 * 1024)) #Chunk size to avoid some funky api limits
+    log("Upload Complete, media: "+str(media))
+    time.sleep(10)
+    log("Posting Tweet")
     # create the tweet using the new api. Mention the image uploaded via the old api
     post_result = newapi.create_tweet(text=sampletweet, media_ids=[media.media_id_string], media_tagged_user_ids=[1905372596826505218])
     # the following line prints the response that you receive from the API. You can save it or process it in anyway u want. I am just printing it.
-    print(post_result)
+    log(str(post_result))
 
     #https://developer.x.com/en/docs/x-api/v1/media/upload-media/uploading-media/media-best-practices
+
+def log(string):
+    current_time = datetime.datetime.now(central_tz).strftime('%H:%M')
+    log_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(log_time,"NZT,", current_time,"CT,",string )
 
 def main():
     """Main function to orchestrate the timelapse creation and posting."""
@@ -150,16 +162,31 @@ def main():
         current_time = datetime.datetime.now(central_tz).strftime('%H:%M')
         
         if current_time == DAILY_VIDEO_TIME:
-            print(current_time," Creating Timelapse")
-            create_timelapse()
-            print(current_time, " Posting to Twitter")
-            post_to_twitter()
+
+            log("Clearing Images")
             clear_old_images()
+            log("Creating Timelapse")
+            create_timelapse()
+            log("Posting to Twitter")
+            post_to_twitter()
+
             time.sleep(60)  # Wait a minute to avoid multiple triggers
         else:
+            log("Snapshot Capture")
             capture_snapshot()
-            print(current_time, " Snapshot Capture")
             time.sleep(SNAPSHOT_INTERVAL)
 
+
 if __name__ == '__main__':
-    main()
+    while True:
+        try:
+            main()
+        except KeyboardInterrupt:
+            log("Stopping")
+            break
+        except Exception as e:
+            log(f"Error: {e}")
+        
+        log("Restart in 60s")
+        time.sleep(60)
+        log("Restarting")
