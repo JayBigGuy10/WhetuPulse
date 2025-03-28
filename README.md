@@ -1,5 +1,7 @@
 # NOTES
 
+rename env example to env
+
 https://ilo.so/twitter-id/
 
 https://docs.tweepy.org/en/v3.7.0/api.html
@@ -28,21 +30,10 @@ https://github.com/yt-dlp/yt-dlp
 
 https://deltayeet.net/?page_id=25
 
-Starbase Pulse
-The Starbase Pulse bot watches NASA Spaceflight‘s incredible Starbase Live feed and generates a 24-hour timelapse that becomes a fun way to check the pulse of Boca Chica by compressing a day of spacecraft construction and testing down to a couple minutes.
 
-From sunrise to sunrise, you can see the frantic activity that NSF’s team of hard working folks have been documenting day in and out.
-
-How it works
-deltaYeet’s servers watch the stream using ffmpeg and save a snapshot every 30 seconds via a cron job.
-
-Every 30 minutes, they update the URL for the stream (which changes periodically) to keep it live using youtube-dl.
-
-Every few hours, a maintenance script clears out pictures more than 24 hours old after The Incident where the @StarbasePulse took down all of the deltaYeet bots by using up all of the server’s disk space. In my defense, I forgot hard drives were finite.
+The bot watches NASA Spaceflight‘s Starbase Live feed and generates a 24-hour timelapse
 
 At 8:00 AM Central, a render script uses a different part of ffmpeg (is there anything it can’t do?) to take the ~2,880 images and compile them together as a 30fps MP4.
-
-It passes it to a posting function that uses abraham/twitteroauth to post it to twitter on the @StarbasePulse feed and then the cycle of life continues.
 
 args
     ARG STREAM
