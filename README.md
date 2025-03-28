@@ -1,3 +1,9 @@
+# What does WhetuPulse Do?
+
+The bot watches NASA Spaceflight‘s Starbase Live feed and generates a 24-hour timelapse at 30 second intervals
+
+At 8:00 AM Central, a render script uses a different part of ffmpeg (is there anything it can’t do?) to take the ~2,880 images and compile them together as a 30fps MP4 which is then posed to twitter
+
 # NOTES
 
 rename env example to env
@@ -31,9 +37,7 @@ https://github.com/yt-dlp/yt-dlp
 https://deltayeet.net/?page_id=25
 
 
-The bot watches NASA Spaceflight‘s Starbase Live feed and generates a 24-hour timelapse
 
-At 8:00 AM Central, a render script uses a different part of ffmpeg (is there anything it can’t do?) to take the ~2,880 images and compile them together as a 30fps MP4.
 
 args
     ARG STREAM
