@@ -4,6 +4,7 @@ import time
 import datetime
 import tweepy
 import pytz
+import re
 
 # Configuration
 global STREAM_URL
@@ -26,13 +27,15 @@ TWITTER_CREDENTIALS = {
 
 central_tz = pytz.timezone(os.environ.get("TZ"))
 
+home_tz = pytz.timezone("Pacific/Auckland")
+
 def capture_snapshot():
     """Captures a snapshot from the live stream."""
     global STREAM_URL
 
     direct_url = STREAM_URL
 
-    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.datetime.now(central_tz).strftime('%Y%m%d_%H%M%S')
     image_path = os.path.join(IMAGE_DIR, f'snapshot_{timestamp}.jpg')
 
     # Capture a frame from the stream
@@ -67,16 +70,30 @@ def update_stream_url():
     log("STREAM: "+STREAM)
     log("STREAM_URL: "+STREAM_URL)
 
+def extract_datetime_from_filename(filename):
+    pattern = re.compile(r"snapshot_(\d{8})_(\d{6})\.jpg")
+    match = pattern.match(filename)
+    if match:
+        date_str, time_str = match.groups()
+        return datetime.datetime.strptime(date_str + time_str, "%Y%m%d%H%M%S")
+    return None
+
 def clear_old_images():
     """Deletes images older than 24 hours."""
-    now = time.time()
+    now = datetime.datetime.now(central_tz)
     for filename in os.listdir(IMAGE_DIR):
         file_path = os.path.join(IMAGE_DIR, filename)
-        if os.stat(file_path).st_mtime < now - 86400:
-            log("REMOVE: "+file_path)
-            os.remove(file_path)
 
-        #TODO do this on filename
+            # Extract datetime from filename
+        file_datetime = extract_datetime_from_filename(filename)
+    
+        # Check if file matches the pattern and is older than 24 hours
+        if file_datetime is not None and (now - file_datetime).total_seconds() > 86400:
+            try:
+                os.remove(file_path)
+                log(f"Deleted: {filename}")
+            except Exception as e:
+                log(f"Error deleting {filename}: {e}")
 
 def create_timelapse():
     """Creates a timelapse video from the collected images using a file list instead of glob."""
@@ -152,7 +169,7 @@ def post_to_twitter():
 
 def log(string):
     current_time = datetime.datetime.now(central_tz).strftime('%H:%M')
-    log_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_time = datetime.datetime.now(home_tz).strftime("%Y-%m-%d %H:%M:%S")
     print(log_time,"NZT,", current_time,"CT,",string )
 
 def main():
