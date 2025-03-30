@@ -75,7 +75,8 @@ def extract_datetime_from_filename(filename):
     match = pattern.match(filename)
     if match:
         date_str, time_str = match.groups()
-        return datetime.datetime.strptime(date_str + time_str, "%Y%m%d%H%M%S")
+        datetim = datetime.datetime.strptime(date_str + time_str, "%Y%m%d%H%M%S")
+        return central_tz.localize(datetim)
     return None
 
 def clear_old_images():
@@ -99,6 +100,7 @@ def create_timelapse():
     """Creates a timelapse video from the collected images using a file list instead of glob."""
     list_file = os.path.join(IMAGE_DIR, 'file_list.txt')
 
+    log("Step 1, file list")
     # Step 1: Generate a list of image filenames
     with open(list_file, 'w') as f:
         for filename in sorted(os.listdir(IMAGE_DIR)):  # Sort ensures time order
@@ -118,6 +120,7 @@ def create_timelapse():
         VIDEO_OUTPUT
     ]
 
+    log("Step 2, ffmpeg")
     ffmpeg_result = subprocess.run(command, text=True, capture_output=True)
 
     log("FFmpeg stdout: "+ffmpeg_result.stdout)
