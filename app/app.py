@@ -154,8 +154,26 @@ def post_to_twitter():
     yesterday = today - datetime.timedelta(days=1)
     yesterday_short = yesterday.strftime('%b %d')  # 'Jan 31' (for example)
 
+    # Determine whether we have a full set of images. If fewer than 3000 images, mark tweet as incomplete.
+    try:
+        num_images = sum(1 for f in os.listdir(IMAGE_DIR) if f.lower().endswith('.jpg'))
+    except Exception as e:
+        log(f"Error counting images: {e}")
+        num_images = 0
+
+    prefix = "Incomplete " if num_images < 3000 else ""
+    log(f"Number of images: {num_images}. Tweet prefix: '{prefix.strip()}'")
+
+    # If fewer than 3000 images, show the number of images instead of '24 hour'
+    if num_images < 3000:
+        timespan_text = f"{num_images} image"
+    else:
+        timespan_text = "24 hour"
+
+    log(f"Timespan text for tweet: {timespan_text}")
+
     #TODO get this from somewhere dynamic
-    sampletweet = f"Morning to Morning 24 hour timelapse ({yesterday_short} through {today_short}) of the @NASASpaceflight Starbase Live camera at nsf.live/starbase \n\n #SpaceX #Starship"
+    sampletweet = f"{prefix} Morning to Morning {timespan_text} timelapse ({yesterday_short} through {today_short}) of the @NASASpaceflight Starbase Live camera at nsf.live/starbase \n\n #SpaceX #Starship"
 
     # upload the media using the old api
     log("Uploading Media")
