@@ -161,11 +161,11 @@ def post_to_twitter():
         log(f"Error counting images: {e}")
         num_images = 0
 
-    prefix = "Incomplete " if num_images < 3000 else ""
+    prefix = "Incomplete " if num_images < 2500 else ""
     log(f"Number of images: {num_images}. Tweet prefix: '{prefix.strip()}'")
 
     # If fewer than 3000 images, show the number of images instead of '24 hour'
-    if num_images < 3000:
+    if num_images < 2500:
         timespan_text = f"{num_images} image"
     else:
         timespan_text = "24 hour"
