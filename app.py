@@ -8,23 +8,61 @@ import re
 from pathlib import Path
 
 # Configuration
-STREAM = os.environ.get('STREAM')                                           # 'https://www.youtube.com/watch?v=mhJRzQsLZGg'
-SNAPSHOT_INTERVAL = int(os.environ.get('SNAPSHOT_INTERVAL'))                # seconds
-DAILY_VIDEO_TIME = os.environ.get('DAILY_VIDEO_TIME')                       # 8:00 AM Central Time
-IMAGE_DIR = str(Path(os.environ.get('DIR')) / "data/images")                # 'C:/Users/JaydenL/Documents/WhetuPulse/images'
-VIDEO_OUTPUT = str(Path(os.environ.get('DIR')) / "data/output/video.mp4")   # 'C:/Users/JaydenL/Documents/WhetuPulse/output/video.mp4'
-
+STREAM = os.environ.get('STREAM')                               # 'https://www.youtube.com/watch?v=mhJRzQsLZGg'
+SNAPSHOT_INTERVAL = int(os.environ.get('SNAPSHOT_INTERVAL'))    # seconds
+DAILY_VIDEO_TIME = os.environ.get('DAILY_VIDEO_TIME')           # 8:00 AM Central Time
+DIR = Path(os.environ.get('DIR'))
+IMAGE_DIR = str(DIR / "data/images")                            # 'C:/Users/JaydenL/Documents/WhetuPulse/data/images'
+VIDEO_OUTPUT = str(DIR / "data/video.mp4")                      # 'C:/Users/JaydenL/Documents/WhetuPulse/data/video.mp4'
+LIST_FILE = str(DIR / 'data/file_list.txt')
 TWITTER_CREDENTIALS = {
     'consumer_key': os.environ.get('consumer_key'),
     'consumer_secret': os.environ.get('consumer_secret'),
-    'token': os.environ.get('token'),#access key
-    'token_secret': os.environ.get('token_secret'),#access secret
+    'token': os.environ.get('token'),                           #access key
+    'token_secret': os.environ.get('token_secret'),             #access secret
     'bearer_token': os.environ.get('bearer_token')
 }
 
 central_tz = pytz.timezone(os.environ.get("TZ"))
-
 home_tz = pytz.timezone("Pacific/Auckland")
+
+def format_short(dt):
+        hour = dt.strftime('%I').lstrip('0')
+        ampm = dt.strftime('%p').lower()
+        return f"{dt.strftime('%b %d')} {hour}{ampm}"
+
+def extract_datetime_from_filename(filename):
+    pattern = re.compile(r"snapshot_(\d{8})_(\d{6})\.jpg")
+    match = pattern.match(filename)
+    if match:
+        date_str, time_str = match.groups()
+        datetim = datetime.datetime.strptime(date_str + time_str, "%Y%m%d%H%M%S")
+        return central_tz.localize(datetim)
+    return None
+
+def log(string):
+    current_time = datetime.datetime.now(central_tz).strftime('%H:%M')
+    log_time = datetime.datetime.now(home_tz).strftime("%Y-%m-%d %H:%M:%S")
+    print(log_time,"NZT,", current_time,"CT,",string)
+
+def get_stream_url(stream):
+    """Updates the live stream URL using youtube-dl."""
+
+    log("Getting stream url for: "+stream)
+
+    command = [
+        'ssh', 'linux-labs', '-o', 'StrictHostKeyChecking=no', f'./yt-dlp/yt-dlp -g {stream}'
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    
+    result_string = result.stdout.strip()
+
+    if "manifest.googlevideo.com" not in result_string:
+        log("Got BAD url: "+result.stdout+" "+result.stderr)
+        return ""
+    else:
+        log("Got GOOD url: "+ result_string)
+        return result_string
 
 def capture_snapshot(stream_url):
     """Captures a snapshot from the live stream."""
@@ -47,85 +85,57 @@ def capture_snapshot(stream_url):
         log("FFmpeg stderr: "+ffmpeg_result.stderr)
         raise Exception("CANT_OPEN_URL")
 
-def get_stream_url(stream):
-    """Updates the live stream URL using youtube-dl."""
-
-    log("Getting stream url for: "+stream)
-
-    command = [
-        'ssh', 'linux-labs', '-o', 'StrictHostKeyChecking=no', f'./yt-dlp/yt-dlp -g {stream}'
-    ]
-    result = subprocess.run(command, capture_output=True, text=True)
-    
-    result_string = result.stdout.strip()
-
-    if "manifest.google.com" not in result_string:
-        log("Got BAD url: "+result.stdout+" "+result.stderr)
-        return ""
-    else:
-        log("Got GOOD url: "+ result_string)
-        return result_string
-
-def extract_datetime_from_filename(filename):
-    pattern = re.compile(r"snapshot_(\d{8})_(\d{6})\.jpg")
-    match = pattern.match(filename)
-    if match:
-        date_str, time_str = match.groups()
-        datetim = datetime.datetime.strptime(date_str + time_str, "%Y%m%d%H%M%S")
-        return central_tz.localize(datetim)
-    return None
-
-def clear_old_images():
-    """Deletes images older than 24 hours."""
-    now = datetime.datetime.now(central_tz)
-    for filename in os.listdir(IMAGE_DIR):
-        file_path = os.path.join(IMAGE_DIR, filename)
-
-        # Extract datetime from filename
-        file_datetime = extract_datetime_from_filename(filename)
-    
-        # Check if file matches the pattern and is older than 24 hours
-        if file_datetime is not None and (now - file_datetime).total_seconds() > 86400:
-            try:
-                os.remove(file_path)
-                log(f"Deleted: {filename}")
-            except Exception as e:
-                log(f"Error deleting {filename}: {e}")
-
 def create_timelapse():
-    """Creates a timelapse video from the collected images using a file list instead of glob."""
-    list_file = os.path.join(IMAGE_DIR, 'file_list.txt')
+    """Creates a timelapse video from the collected images using a file list"""
 
-    log("Step 1, file list")
     # Step 1: Generate a list of image filenames
-    with open(list_file, 'w') as f:
-        for filename in sorted(os.listdir(IMAGE_DIR)):  # Sort ensures time order
-            if filename.endswith(".jpg"):
-                f.write(f"file '{os.path.join(IMAGE_DIR, filename)}'\n")
+    log("Timelapse: Listing Files")
+    sorted_images = sorted(f for f in os.listdir(IMAGE_DIR) if f.lower().endswith('.jpg'))
+    with open(LIST_FILE, 'w') as f:
+        for filename in sorted_images:  # Sort ensures time order
+            f.write(f"file '{os.path.join(IMAGE_DIR, filename)}'\n")
 
-    # Step 2: Use FFmpeg with the list file
+    # Step 2: Use FFmpeg to join all of the images named in the file together
+    log("Timelapse: Running FFmpeg")
     command = [
         'ffmpeg',
         '-y', #overwrite existing file
         '-f', 'concat',  
         '-safe', '0',     # Allow unsafe paths
-        '-i', list_file, # Read from the list file
+        '-i', LIST_FILE, # Read from the list file
         '-framerate', '30',
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
         VIDEO_OUTPUT
     ]
-
-    log("Step 2, ffmpeg")
     ffmpeg_result = subprocess.run(command, text=True, capture_output=True)
-
     log("FFmpeg stdout: "+ffmpeg_result.stdout)
     log("FFmpeg stderr: "+ffmpeg_result.stderr)
 
+    # Step 3: Create Tweet String
+    if sorted_images:
+        # Extract dates from first and last image filenames
+        previous_dt = extract_datetime_from_filename(sorted_images[0])
+        current_dt = extract_datetime_from_filename(sorted_images[-1])
+    else:
+        # Get today's and yesterdays date
+        current_dt = datetime.datetime.now(central_tz)
+        previous_dt = current_dt - datetime.timedelta(days=1)
 
-def post_to_twitter():
-    """Posts the generated video to Twitter."""
-    # Authenticate to Twitter
+    # Format the dates
+    yesterday_short = format_short(previous_dt)
+    today_short = format_short(current_dt)
+        
+    # Determine whether we have a full set of images.
+    num_images = len(sorted_images)
+    log(f"Number of images: {num_images}")
+
+    if num_images < 2500:
+        tweet_text = f"🚀 {yesterday_short} through {today_short} timelapse of Starbase Live \n\n nsf.live/starbase @NASASpaceflight #SpaceX #Starship {num_images}"
+    else:
+        tweet_text = f"📸 {yesterday_short} through {today_short} timelapse of Starbase Live \n\n nsf.live/starbase @NASASpaceflight #SpaceX #Starship"    
+
+    # Step 4: Authenticate to Twitter and make the post
     auth = tweepy.OAuthHandler(TWITTER_CREDENTIALS['consumer_key'], TWITTER_CREDENTIALS['consumer_secret'])
     auth.set_access_token(
         TWITTER_CREDENTIALS['token'],
@@ -141,53 +151,25 @@ def post_to_twitter():
     )
     # Create API object using the old twitter APIv1.1
     api = tweepy.API(auth)
+    # # upload the media using the old api
+    # log("Uploading Media")
+    # media = api.media_upload(filename=VIDEO_OUTPUT,media_category="tweet_video",additional_owners="1905372596826505218",chunk_size=(5 * 1024 * 1024)) #Chunk size to avoid some funky api limits
+    # log("Upload Complete, media: "+str(media))
+    # time.sleep(10)
+    log("Posting Tweet: "+tweet_text)
+    # # create the tweet using the new api. Mention the image uploaded via the old api
+    # post_result = newapi.create_tweet(text=tweet_text, media_ids=[media.media_id_string], media_tagged_user_ids=[1905372596826505218])
+    # # the following line prints the response that you receive from the API. You can save it or process it in anyway u want. I am just printing it.
+    # log(str(post_result))
 
-    # Get today's date in short format
-    today = datetime.datetime.now(central_tz)
-    today_short = today.strftime('%b %d')  # 'Feb 01'
-
-    # Get yesterday's date
-    yesterday = today - datetime.timedelta(days=1)
-    yesterday_short = yesterday.strftime('%b %d')  # 'Jan 31' (for example)
-
-    # Determine whether we have a full set of images. If fewer than 3000 images, mark tweet as incomplete.
-    try:
-        num_images = sum(1 for f in os.listdir(IMAGE_DIR) if f.lower().endswith('.jpg'))
-    except Exception as e:
-        log(f"Error counting images: {e}")
-        num_images = 0
-
-    prefix = "Incomplete " if num_images < 2500 else ""
-    log(f"Number of images: {num_images}. Tweet prefix: '{prefix.strip()}'")
-
-    # If fewer than 3000 images, show the number of images instead of '24 hour'
-    if num_images < 2500:
-        timespan_text = f"{num_images} image"
-    else:
-        timespan_text = "24 hour"
-
-    log(f"Timespan text for tweet: {timespan_text}")
-
-    #TODO get this from somewhere dynamic
-    sampletweet = f"{prefix} Morning to Morning {timespan_text} timelapse ({yesterday_short} through {today_short}) of the @NASASpaceflight Starbase Live camera at nsf.live/starbase \n\n #SpaceX #Starship"
-
-    # upload the media using the old api
-    log("Uploading Media")
-    media = api.media_upload(filename=VIDEO_OUTPUT,media_category="tweet_video",additional_owners="1905372596826505218",chunk_size=(5 * 1024 * 1024)) #Chunk size to avoid some funky api limits
-    log("Upload Complete, media: "+str(media))
-    time.sleep(10)
-    log("Posting Tweet")
-    # create the tweet using the new api. Mention the image uploaded via the old api
-    post_result = newapi.create_tweet(text=sampletweet, media_ids=[media.media_id_string], media_tagged_user_ids=[1905372596826505218])
-    # the following line prints the response that you receive from the API. You can save it or process it in anyway u want. I am just printing it.
-    log(str(post_result))
-
-    #https://developer.x.com/en/docs/x-api/v1/media/upload-media/uploading-media/media-best-practices
-
-def log(string):
-    current_time = datetime.datetime.now(central_tz).strftime('%H:%M')
-    log_time = datetime.datetime.now(home_tz).strftime("%Y-%m-%d %H:%M:%S")
-    print(log_time,"NZT,", current_time,"CT,",string )
+    # Step 5: nuke the files used to make the video
+    log("Attempting to delete "+len(sorted_images)+" images")
+    for filename in sorted_images:
+        file_path = os.path.join(IMAGE_DIR, filename)
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            log(f"Error deleting {filename}: {e}")
 
 def main():
     """Main function to orchestrate the timelapse creation and posting."""
@@ -199,12 +181,8 @@ def main():
         
         if current_time == DAILY_VIDEO_TIME:
 
-            log("Clearing Images")
-            clear_old_images()
             log("Creating Timelapse")
             create_timelapse()
-            log("Posting to Twitter")
-            post_to_twitter()
 
             time.sleep(60)  # Wait a minute to avoid multiple triggers
         else:
@@ -222,28 +200,28 @@ def main():
 if __name__ == '__main__':
     log("Starting")
 
-    commands = [
-        ["chmod", "700", "/root/.ssh"],  # the .ssh directory
-        ["chmod", "600", "/root/.ssh/id_rsa", "/root/.ssh/id_ed25519"],  # private keys
-        ["chmod", "600", "/root/.ssh/config"],  # ssh config
-        ["chmod", "644", "/root/.ssh/known_hosts"],  # known hosts
-    ]
+    # commands = [
+    #     ["chmod", "700", "/root/.ssh"],  # the .ssh directory
+    #     ["chmod", "600", "/root/.ssh/id_rsa", "/root/.ssh/id_ed25519"],  # private keys
+    #     ["chmod", "600", "/root/.ssh/config"],  # ssh config
+    #     ["chmod", "644", "/root/.ssh/known_hosts"],  # known hosts
+    # ]
 
-    for cmd in commands:
-        try:
-            subprocess.run(cmd, check=True)
-            print(f"Ran: {' '.join(cmd)}")
-        except subprocess.CalledProcessError as e:
-            print(f"Failed: {' '.join(cmd)}\n{e}")
+    # for cmd in commands:
+    #     try:
+    #         subprocess.run(cmd, check=True)
+    #         print(f"Ran: {' '.join(cmd)}")
+    #     except subprocess.CalledProcessError as e:
+    #         print(f"Failed: {' '.join(cmd)}\n{e}")
 
     while True:
         try:
             main()
         except KeyboardInterrupt:
-            log("Stopping")
+            log("KeyboardInterrupt: Stopping")
             break
         except Exception as e:
-            log(f"Error: {e}")
+            log(f"Fatal Error: {e}")
         
         log("Restart in 60s")
         time.sleep(60)

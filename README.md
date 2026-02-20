@@ -37,7 +37,7 @@ https://github.com/yt-dlp/yt-dlp
 https://deltayeet.net/?page_id=25
 
 
-
+https://developer.x.com/en/docs/x-api/v1/media/upload-media/uploading-media/media-best-practices
 
 args
     ARG STREAM
