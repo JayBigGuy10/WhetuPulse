@@ -8,7 +8,7 @@ ENV TZ=America/Chicago
 
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends &&\
-    apt-get install -y ffmpeg &&\
+    apt-get install -y ffmpeg openssh-client &&\
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

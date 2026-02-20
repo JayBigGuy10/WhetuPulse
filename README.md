@@ -57,3 +57,7 @@ Windows
 > docker build -t whetupulse .
 
 > docker run -d -v C:\docker\whetupulse\data\output:/srv/whetupulse/output -v C:\docker\whetupulse\data\images:/srv/whetupulse/images  --env-file .env --name=whetupulse whetupulse
+
+
+Dev
+> .\ffmpeg -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -i direct_url -frames:v 1 image_path

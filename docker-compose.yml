@@ -8,5 +8,5 @@ services:
     env_file: 
       - .env
     volumes:
-      - C:\docker\whetupulse\data\output:/srv/whetupulse/output
-      - C:\docker\whetupulse\data\images:/srv/whetupulse/images
+      - C:\docker\whetupulse\data:/srv/whetupulse/data
+      - C:\docker\whetupulse\ssh:/root/.ssh:ro

@@ -14,8 +14,8 @@ STREAM = os.environ.get('STREAM')                                           #'ht
 SNAPSHOT_INTERVAL = int(os.environ.get('SNAPSHOT_INTERVAL'))  # seconds
 DAILY_VIDEO_TIME = os.environ.get('DAILY_VIDEO_TIME')    # 8:00 AM Central Time
 
-IMAGE_DIR = os.environ.get('DIR')+"/images"               #'C:/Users/JaydenL/Documents/WhetuPulse/images'
-VIDEO_OUTPUT = os.environ.get('DIR')+"/output/video.mp4"  #'C:/Users/JaydenL/Documents/WhetuPulse/output/video.mp4'
+IMAGE_DIR = os.environ.get('DIR')+"/data/images"               #'C:/Users/JaydenL/Documents/WhetuPulse/images'
+VIDEO_OUTPUT = os.environ.get('DIR')+"/data/output/video.mp4"  #'C:/Users/JaydenL/Documents/WhetuPulse/output/video.mp4'
 
 TWITTER_CREDENTIALS = {
     'consumer_key': os.environ.get('consumer_key'),
@@ -60,8 +60,7 @@ def update_stream_url():
     global STREAM_URL
 
     command = [
-        'yt-dlp',
-        '-g', STREAM
+        'ssh', 'linux-labs', './yt-dlp/yt-dlp -g https://www.youtube.com/watch?v=mhJRzQsLZGg'
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     
