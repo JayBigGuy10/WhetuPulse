@@ -1,0 +1,11 @@
+[project]
+name = "whetupulse"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pytz>=2025.2",
+    "tweepy>=4.16.0",
+    "yt-dlp>=2026.2.4",
+]

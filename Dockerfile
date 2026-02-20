@@ -1,34 +1,36 @@
-FROM python:3.12-slim  
+FROM python:3.12-slim
 
-ENV SNAPSHOT_INTERVAL='30'
-ENV DAILY_VIDEO_TIME='08:00'
-ENV DIR='/srv/whetupulse/'
-
+ENV SNAPSHOT_INTERVAL=30
+ENV DAILY_VIDEO_TIME=08:00
+ENV DIR=/srv/whetupulse/
 ENV TZ=America/Chicago
 
+# Install system deps
 RUN apt-get update && \
-    apt-get install --yes --no-install-recommends &&\
-    apt-get install -y ffmpeg openssh-client &&\
-    apt-get clean && \
+    apt-get install -y --no-install-recommends \
+        ffmpeg \
+        openssh-client \
+        curl \
+        ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-#############################################################################
-# Update pip and setuptools to ensure compatibility with Python 3.12
-RUN python -m ensurepip --upgrade && \
-    python -m pip install --upgrade pip setuptools wheel
-#############################################################################
+# Install uv
+RUN curl -Ls https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
 
-# Install and Update Python Packages
-COPY requirements.txt /tmp/requirements.txt
-#RUN pip install -r /tmp/requirements.txt
-RUN pip install --default-timeout=1000 -r /tmp/requirements.txt
+# Set working directory
+WORKDIR /srv/whetupulse
 
-# Copy over the Python Project
-COPY ./app/ /srv/whetupulse/
+# Copy dependency files first (for Docker layer caching)
+COPY pyproject.toml uv.lock* ./
 
-RUN mkdir /srv/whetupulse/images/
-RUN mkdir /srv/whetupulse/output/
+# Install dependencies into system environment
+RUN uv sync --frozen --no-dev
 
-WORKDIR /srv/whetupulse/
+# Copy application code
+COPY app.py ./
 
-ENTRYPOINT ["python","-u","app.py"]
+# Create required directories
+RUN mkdir -p /data/images /data/output
+
+ENTRYPOINT ["uv", "run", "app.py"]
