@@ -28,6 +28,6 @@ RUN uv sync --frozen --no-dev
 COPY app.py ./
 
 # Create required directories
-RUN mkdir -p /data/images /data/output
+RUN mkdir -p data/images data/output
 
 ENTRYPOINT ["uv", "run", "python", "-u", "app.py"]
