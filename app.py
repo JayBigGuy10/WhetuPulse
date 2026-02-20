@@ -2,6 +2,7 @@ import os
 import subprocess
 import time
 import datetime
+import threading
 import tweepy
 import pytz
 import re
@@ -91,6 +92,9 @@ def create_timelapse():
     # Step 1: Generate a list of image filenames
     log("Timelapse: Listing Files")
     sorted_images = sorted(f for f in os.listdir(IMAGE_DIR) if f.lower().endswith('.jpg'))
+    if len(sorted_images) == 0:
+        log("No images found to timelapse, aborting")
+        return
     with open(LIST_FILE, 'w') as f:
         for filename in sorted_images:  # Sort ensures time order
             f.write(f"file '{os.path.join(IMAGE_DIR, filename)}'\n")
@@ -151,19 +155,19 @@ def create_timelapse():
     )
     # Create API object using the old twitter APIv1.1
     api = tweepy.API(auth)
-    # # upload the media using the old api
-    # log("Uploading Media")
-    # media = api.media_upload(filename=VIDEO_OUTPUT,media_category="tweet_video",additional_owners="1905372596826505218",chunk_size=(5 * 1024 * 1024)) #Chunk size to avoid some funky api limits
-    # log("Upload Complete, media: "+str(media))
-    # time.sleep(10)
+    # upload the media using the old api
+    log("Uploading Media")
+    media = api.media_upload(filename=VIDEO_OUTPUT,media_category="tweet_video",additional_owners="1905372596826505218",chunk_size=(5 * 1024 * 1024)) #Chunk size to avoid some funky api limits
+    log("Upload Complete, media: "+str(media))
+    time.sleep(10)
     log("Posting Tweet: "+tweet_text)
-    # # create the tweet using the new api. Mention the image uploaded via the old api
-    # post_result = newapi.create_tweet(text=tweet_text, media_ids=[media.media_id_string], media_tagged_user_ids=[1905372596826505218])
-    # # the following line prints the response that you receive from the API. You can save it or process it in anyway u want. I am just printing it.
-    # log(str(post_result))
+    # create the tweet using the new api. Mention the image uploaded via the old api
+    post_result = newapi.create_tweet(text=tweet_text, media_ids=[media.media_id_string], media_tagged_user_ids=[1905372596826505218])
+    # the following line prints the response that you receive from the API. You can save it or process it in anyway u want. I am just printing it.
+    log(str(post_result))
 
     # Step 5: nuke the files used to make the video
-    log("Attempting to delete "+len(sorted_images)+" images")
+    log("Deleting "+str(len(sorted_images))+" images")
     for filename in sorted_images:
         file_path = os.path.join(IMAGE_DIR, filename)
         try:
@@ -171,48 +175,63 @@ def create_timelapse():
         except Exception as e:
             log(f"Error deleting {filename}: {e}")
 
+def get_stream_url_with_backoff():
+    """Calls get_stream_url with exponential backoff until a valid URL is returned."""
+    delay = 5
+    max_delay = 1800 # 30 minutes
+    while True:
+        stream_url = get_stream_url(stream=STREAM)
+        if stream_url:
+            return stream_url
+        log(f"Stream URL empty, retrying in {delay}s")
+        time.sleep(delay)
+        delay = min(delay * 2, max_delay)
+
+def snapshot_loop():
+    """Continuously captures snapshots in a background thread."""
+    stream_url = get_stream_url_with_backoff()
+    while True:
+        log("Snapshot Capture")
+        try:
+            capture_snapshot(stream_url)
+        except Exception as e:
+            if str(e) == "CANT_OPEN_URL":
+                stream_url = get_stream_url_with_backoff()
+        time.sleep(SNAPSHOT_INTERVAL)
+
 def main():
     """Main function to orchestrate the timelapse creation and posting."""
 
-    stream_url = get_stream_url(stream=STREAM)
+    # Start snapshot capture in a background thread
+    snapshot_thread = threading.Thread(target=snapshot_loop, daemon=True)
+    snapshot_thread.start()
 
     while True:
         current_time = datetime.datetime.now(central_tz).strftime('%H:%M')
-        
-        if current_time == DAILY_VIDEO_TIME:
 
+        if current_time == DAILY_VIDEO_TIME:
             log("Creating Timelapse")
             create_timelapse()
-
-            time.sleep(60)  # Wait a minute to avoid multiple triggers
+            time.sleep(65)  # Wait a minute to avoid multiple triggers
         else:
-            log("Snapshot Capture")
-
-            try:
-                capture_snapshot(stream_url)
-            except Exception as e:
-                if str(e) == "CANT_OPEN_URL":
-                    stream_url = get_stream_url(stream=STREAM)
-
-            time.sleep(SNAPSHOT_INTERVAL)
-
+            time.sleep(1)
 
 if __name__ == '__main__':
     log("Starting")
 
-    # commands = [
-    #     ["chmod", "700", "/root/.ssh"],  # the .ssh directory
-    #     ["chmod", "600", "/root/.ssh/id_rsa", "/root/.ssh/id_ed25519"],  # private keys
-    #     ["chmod", "600", "/root/.ssh/config"],  # ssh config
-    #     ["chmod", "644", "/root/.ssh/known_hosts"],  # known hosts
-    # ]
+    commands = [
+        ["chmod", "700", "/root/.ssh"],  # the .ssh directory
+        ["chmod", "600", "/root/.ssh/id_rsa", "/root/.ssh/id_ed25519"],  # private keys
+        ["chmod", "600", "/root/.ssh/config"],  # ssh config
+        ["chmod", "644", "/root/.ssh/known_hosts"],  # known hosts
+    ]
 
-    # for cmd in commands:
-    #     try:
-    #         subprocess.run(cmd, check=True)
-    #         print(f"Ran: {' '.join(cmd)}")
-    #     except subprocess.CalledProcessError as e:
-    #         print(f"Failed: {' '.join(cmd)}\n{e}")
+    for cmd in commands:
+        try:
+            subprocess.run(cmd, check=True)
+            print(f"Ran: {' '.join(cmd)}")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed: {' '.join(cmd)}\n{e}")
 
     while True:
         try:
