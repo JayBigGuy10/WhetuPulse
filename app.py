@@ -5,17 +5,14 @@ import datetime
 import tweepy
 import pytz
 import re
+from pathlib import Path
 
 # Configuration
-global STREAM_URL
-STREAM_URL = 'https://manifest.googlevideo.com/api/manifest/hls_playlist/'  #'https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/1743142595/ei/Y-rlZ7n0CsLM4t4PhvqboAU/ip/192.107.171.34/id/mhJRzQsLZGg.11/itag/96/source/yt_live_broadcast/requiressl/yes/ratebypass/yes/live/1/sgoap/gir%3Dyes%3Bitag%3D140/sgovp/gir%3Dyes%3Bitag%3D137/rqh/1/hls_chunk_host/rr1---sn-ntqe6n76.googlevideo.com/xpc/EgVo2aDSNQ%3D%3D/playlist_duration/30/manifest_duration/30/bui/AccgBcOKPZN946bTZEQJApa_HVIrV1AI8G2IHpcfRzVHK5XOCnawybLg8aBmupj_pfIpzQmvnE-KJEtc/spc/_S3wKnhLmz2ulz6-sA7_wo8pb62AGD84CKzb6LaxmGzjdSn6_9X8ex6dE-pjSozXRKdhiVI/vprv/1/playlist_type/DVR/initcwndbps/5292500/met/1743120998,/mh/3F/mm/44/mn/sn-ntqe6n76/ms/lva/mv/m/mvi/1/pl/24/rms/lva,lva/dover/11/pacing/0/keepalive/yes/fexp/51355912,51435733/mt/1743120520/sparams/expire,ei,ip,id,itag,source,requiressl,ratebypass,live,sgoap,sgovp,rqh,xpc,playlist_duration,manifest_duration,bui,spc,vprv,playlist_type/sig/AJfQdSswRQIgAOlDMcBu45dmQAeBVi-vTv7jIptacJqZP1i8VPs2wagCIQCExBMyjuU6E2-HZnm9BpAZPdsBkbKnMIxhzgPB0hje7w%3D%3D/lsparams/hls_chunk_host,initcwndbps,met,mh,mm,mn,ms,mv,mvi,pl,rms/lsig/AFVRHeAwRQIhANSNPCxQ9x76dPa0kkM_jog7ZCwswRppMPPeHvc2PGzyAiBE1XsCw1_BsTZ-h7GuexvdntqQOZx0WnonrhGkA6BFWg%3D%3D/playlist/index.m3u8'
-STREAM = os.environ.get('STREAM')                                           #'https://www.youtube.com/watch?v=mhJRzQsLZGg'
-
-SNAPSHOT_INTERVAL = int(os.environ.get('SNAPSHOT_INTERVAL'))  # seconds
-DAILY_VIDEO_TIME = os.environ.get('DAILY_VIDEO_TIME')    # 8:00 AM Central Time
-
-IMAGE_DIR = os.environ.get('DIR')+"/data/images"               #'C:/Users/JaydenL/Documents/WhetuPulse/images'
-VIDEO_OUTPUT = os.environ.get('DIR')+"/data/output/video.mp4"  #'C:/Users/JaydenL/Documents/WhetuPulse/output/video.mp4'
+STREAM = os.environ.get('STREAM')                                           # 'https://www.youtube.com/watch?v=mhJRzQsLZGg'
+SNAPSHOT_INTERVAL = int(os.environ.get('SNAPSHOT_INTERVAL'))                # seconds
+DAILY_VIDEO_TIME = os.environ.get('DAILY_VIDEO_TIME')                       # 8:00 AM Central Time
+IMAGE_DIR = str(Path(os.environ.get('DIR')) / "data/images")                # 'C:/Users/JaydenL/Documents/WhetuPulse/images'
+VIDEO_OUTPUT = str(Path(os.environ.get('DIR')) / "data/output/video.mp4")   # 'C:/Users/JaydenL/Documents/WhetuPulse/output/video.mp4'
 
 TWITTER_CREDENTIALS = {
     'consumer_key': os.environ.get('consumer_key'),
@@ -29,11 +26,8 @@ central_tz = pytz.timezone(os.environ.get("TZ"))
 
 home_tz = pytz.timezone("Pacific/Auckland")
 
-def capture_snapshot():
+def capture_snapshot(stream_url):
     """Captures a snapshot from the live stream."""
-    global STREAM_URL
-
-    direct_url = STREAM_URL
 
     timestamp = datetime.datetime.now(central_tz).strftime('%Y%m%d_%H%M%S')
     image_path = os.path.join(IMAGE_DIR, f'snapshot_{timestamp}.jpg')
@@ -42,7 +36,7 @@ def capture_snapshot():
     ffmpeg_command = [
         'ffmpeg',
         '-headers', "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        '-i', direct_url,
+        '-i', stream_url,
         '-frames:v', '1',
         image_path
     ]
@@ -51,23 +45,26 @@ def capture_snapshot():
     if "http error 403 forbidden" in ffmpeg_result.stderr.lower() or "error opening input" in ffmpeg_result.stderr.lower():
         log("FFmpeg stdout: "+ffmpeg_result.stdout)
         log("FFmpeg stderr: "+ffmpeg_result.stderr)
-        log("UPDATING STEAM URL")
-        update_stream_url()
+        raise Exception("CANT_OPEN_URL")
 
-def update_stream_url():
+def get_stream_url(stream):
     """Updates the live stream URL using youtube-dl."""
 
-    global STREAM_URL
+    log("Getting stream url for: "+stream)
 
     command = [
-        'ssh', 'linux-labs', '-o', 'StrictHostKeyChecking=no', './yt-dlp/yt-dlp -g https://www.youtube.com/watch?v=mhJRzQsLZGg'
+        'ssh', 'linux-labs', '-o', 'StrictHostKeyChecking=no', f'./yt-dlp/yt-dlp -g {stream}'
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     
-    STREAM_URL = result.stdout.strip()
+    result_string = result.stdout.strip()
 
-    log("STREAM: "+STREAM)
-    log("STREAM_URL: "+STREAM_URL)
+    if "manifest.google.com" not in result_string:
+        log("Got BAD url: "+result.stdout+" "+result.stderr)
+        return ""
+    else:
+        log("Got GOOD url: "+ result_string)
+        return result_string
 
 def extract_datetime_from_filename(filename):
     pattern = re.compile(r"snapshot_(\d{8})_(\d{6})\.jpg")
@@ -84,7 +81,7 @@ def clear_old_images():
     for filename in os.listdir(IMAGE_DIR):
         file_path = os.path.join(IMAGE_DIR, filename)
 
-            # Extract datetime from filename
+        # Extract datetime from filename
         file_datetime = extract_datetime_from_filename(filename)
     
         # Check if file matches the pattern and is older than 24 hours
@@ -195,6 +192,8 @@ def log(string):
 def main():
     """Main function to orchestrate the timelapse creation and posting."""
 
+    stream_url = get_stream_url(stream=STREAM)
+
     while True:
         current_time = datetime.datetime.now(central_tz).strftime('%H:%M')
         
@@ -210,7 +209,13 @@ def main():
             time.sleep(60)  # Wait a minute to avoid multiple triggers
         else:
             log("Snapshot Capture")
-            capture_snapshot()
+
+            try:
+                capture_snapshot(stream_url)
+            except Exception as e:
+                if str(e) == "CANT_OPEN_URL":
+                    stream_url = get_stream_url(stream=STREAM)
+
             time.sleep(SNAPSHOT_INTERVAL)
 
 
