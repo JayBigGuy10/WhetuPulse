@@ -1,4 +1,3 @@
 .venv
-images/
-output/
+data/
 .env
