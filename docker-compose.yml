@@ -9,4 +9,4 @@ services:
       - .env
     volumes:
       - C:\docker\whetupulse\data:/srv/whetupulse/data
-      - C:\docker\whetupulse\ssh:/root/.ssh:ro
+      - C:\docker\whetupulse\ssh:/root/.ssh
