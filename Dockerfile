@@ -9,14 +9,11 @@ ENV TZ=America/Chicago
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
-        openssh-client \
-        curl \
-        ca-certificates && \
+        openssh-client && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv
-RUN curl -Ls https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+RUN pip install --no-cache-dir uv
 
 # Set working directory
 WORKDIR /srv/whetupulse
@@ -33,4 +30,4 @@ COPY app.py ./
 # Create required directories
 RUN mkdir -p /data/images /data/output
 
-ENTRYPOINT ["uv", "run", "app.py"]
+ENTRYPOINT ["uv", "run", "python", "-u", "app.py"]
