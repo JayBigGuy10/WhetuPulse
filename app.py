@@ -60,7 +60,7 @@ def update_stream_url():
     global STREAM_URL
 
     command = [
-        'ssh', 'linux-labs', './yt-dlp/yt-dlp -g https://www.youtube.com/watch?v=mhJRzQsLZGg'
+        'ssh', 'linux-labs', '-o', 'StrictHostKeyChecking=no', './yt-dlp/yt-dlp -g https://www.youtube.com/watch?v=mhJRzQsLZGg'
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     
@@ -215,6 +215,22 @@ def main():
 
 
 if __name__ == '__main__':
+    log("Starting")
+
+    commands = [
+        ["chmod", "700", "/root/.ssh"],  # the .ssh directory
+        ["chmod", "600", "/root/.ssh/id_rsa", "/root/.ssh/id_ed25519"],  # private keys
+        ["chmod", "600", "/root/.ssh/config"],  # ssh config
+        ["chmod", "644", "/root/.ssh/known_hosts"],  # known hosts
+    ]
+
+    for cmd in commands:
+        try:
+            subprocess.run(cmd, check=True)
+            print(f"Ran: {' '.join(cmd)}")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed: {' '.join(cmd)}\n{e}")
+
     while True:
         try:
             main()
