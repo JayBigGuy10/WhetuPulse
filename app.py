@@ -202,10 +202,6 @@ def snapshot_loop():
 def main():
     """Main function to orchestrate the timelapse creation and posting."""
 
-    # Start snapshot capture in a background thread
-    snapshot_thread = threading.Thread(target=snapshot_loop, daemon=True)
-    snapshot_thread.start()
-
     while True:
         current_time = datetime.datetime.now(central_tz).strftime('%H:%M')
 
@@ -226,12 +222,17 @@ if __name__ == '__main__':
         ["chmod", "644", "/root/.ssh/known_hosts"],  # known hosts
     ]
 
-    for cmd in commands:
-        try:
-            subprocess.run(cmd, check=True)
-            print(f"Ran: {' '.join(cmd)}")
-        except subprocess.CalledProcessError as e:
-            print(f"Failed: {' '.join(cmd)}\n{e}")
+    if os.environ.get("DEVMODE") != "True":
+        for cmd in commands:
+            try:
+                subprocess.run(cmd, check=True)
+                print(f"Ran: {' '.join(cmd)}")
+            except subprocess.CalledProcessError as e:
+                print(f"Failed: {' '.join(cmd)}\n{e}")
+
+    # Start snapshot capture in a background thread
+    snapshot_thread = threading.Thread(target=snapshot_loop, daemon=True)
+    snapshot_thread.start()
 
     while True:
         try:
